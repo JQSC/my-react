@@ -1,25 +1,27 @@
+import { createUpdate, enqueueUpdate } from 'reactReconciler/ReactUpdateQueue';
+import { FiberNode } from 'reactReconciler/ReactFiber';
+import { performSyncWorkOnRoot } from 'reactReconciler/ReactFiberWorkLoop';
+
 function ReactRoot(
-    container,
-    isConcurrent,
-    hydrate,
+    container
 ) {
-    //createFiberRoot
-    const root = DOMRenderer.createContainer(container, isConcurrent, hydrate);
-    this._internalRoot = root;
+    // RootFiber tag === 3
+    this.current = new FiberNode(3);
+    // RootFiber指向FiberRoot
+    this.current.stateNode = this;
+    // 应用挂载的根DOM节点
+    this.containerInfo = container;
 }
 ReactRoot.prototype.render = function (
-    children,
-    callback,
+    children
 ) {
-    const root = this._internalRoot;
-    const work = new ReactWork();
-    callback = callback === undefined ? null : callback;
-    if (__DEV__) {
-        warnOnInvalidCallback(callback, 'render');
-    }
-    if (callback !== null) {
-        work.then(callback);
-    }
-    DOMRenderer.updateContainer(children, root, null, work._onCommit);
-    return work;
+    const current = this.current;
+    //const expirationTime = DOMRenderer.requestCurrentTimeForUpdate();
+    // var expirationTime = computeExpirationForFiber(currentTime, current$$1);
+    const update = createUpdate(1);
+    // fiber.tag为HostRoot类型，payload为对应要渲染的ReactComponents
+    update.payload = { children };
+    enqueueUpdate(current, update);
+    return performSyncWorkOnRoot(this);
+
 };
