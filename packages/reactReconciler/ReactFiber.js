@@ -1,5 +1,18 @@
-import { NoEffect } from 'shared/ReactSideEffectTags';
-import { NoWork } from './ReactFiberExpirationTime';
+// import { NoEffect } from 'shared/ReactSideEffectTags';
+// import { NoWork } from './ReactFiberExpirationTime';
+
+import {
+    IndeterminateComponent,
+    HostText,
+    HostComponent,
+    ClassComponent
+  } from 'shared/ReactWorkTags';
+
+// 判断是否是 ClassComponent
+function shouldConstruct(Component) {
+    const prototype = Component.prototype;
+    return !!(prototype && prototype.isReactComponent);
+  }
 
 export class FiberNode {
     constructor(tag, pendingProps, key, mode) {
@@ -7,12 +20,8 @@ export class FiberNode {
         // 3 HostRoot
         // 5 HostComponent
         this.tag = tag;
+        
         this.pendingProps = pendingProps;
-        // prop key
-        this.key = key;
-        // 未使用
-        this.mode = mode;
-
         // type字段由React.createElement注入
         // 对于FunctionComponent，指向 fn
         // 对于ClassComponent，指向 class
@@ -25,15 +34,12 @@ export class FiberNode {
         // 指向兄弟Fiber
         this.sibling = null;
 
-        this.ref = null;
-
         // 对于FunctionComponent，指向 fn()
         // 对于ClassComponent，指向 实例
         // 对于HostComponent，为对应DOM节点
         this.stateNode = null;
-        this.effectTag = NoEffect;
-        // fiber的过期时间
-        this.expirationTime = null;
+
+        this.effectTag = null;
         // 指向前一次render的fiber
         this.alternate = null;
 
@@ -56,13 +62,14 @@ export function createWorkInProgress(current, pendingProps) {
         );
         workInProgress.stateNode = current.stateNode;
         workInProgress.type = current.type;
+        //相互引用
         current.alternate = workInProgress;
         workInProgress.alternate = current;
     } else {
         workInProgress.pendingProps = pendingProps;
 
         // 已有alternate的情况重置effect
-        workInProgress.effectTag = NoWork;
+        workInProgress.effectTag = null;
         workInProgress.firstEffect = null;
         workInProgress.lastEffect = null;
         workInProgress.nextEffect = null;
@@ -76,3 +83,36 @@ export function createWorkInProgress(current, pendingProps) {
     return workInProgress;
 }
 
+// type定义见FiberNode class
+export function createFiberFromTypeAndProps(type, key, pendingProps) {
+    let fiberTag = IndeterminateComponent;
+  
+    // FunctionComponent ClassComponent 类型都是 function
+    if (typeof type === 'function') {
+      if (shouldConstruct(type)) {
+        fiberTag = ClassComponent;
+      }
+    } else if (typeof type === 'string') {
+      fiberTag = HostComponent;
+    }
+    const fiber = new FiberNode(fiberTag, pendingProps, key);
+    fiber.type = type;
+    return fiber;
+  }
+  
+  export function createFiberFromElement(element) {
+    const type = element.type;
+    const key = element.key;
+    const pendingProps = element.props;
+    const fiber = createFiberFromTypeAndProps(
+      type,
+      key,
+      pendingProps
+    );
+    return fiber;
+  }
+  
+  export function createFiberFromText(textContent) {
+    const fiber = new FiberNode(HostText, textContent);
+    return fiber;
+  }

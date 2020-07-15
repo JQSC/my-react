@@ -5,10 +5,8 @@ export const CaptureUpdate = 3;
 
 export function createUpdate(expirationTime) {
     return {
-        expirationTime,
         tag: UpdateState,
         payload: null,
-        callback: null,
         next: null,
         nextEffect: null,
     };
@@ -22,7 +20,25 @@ export function createUpdate(expirationTime) {
 // 插入 u3 形成 u3 - u0 - u1 - u2 -u3  当前pending: u3
 // 故 shared.pending 为 lastPendingUpdate
 // shared.pending.next 为 firstPendingUpdate
+
+/*
+{
+    shared:{
+      pending :{
+          next: self
+          tag:
+          payload:
+      } 
+    },
+    //存在两个以上update
+    pending:{
+        next: update
+    }
+
+}
+*/
 export function enqueueUpdate(fiber, update) {
+
     const updateQueue = fiber.updateQueue;
     if (!updateQueue) {
         // fiber已经unmount
@@ -40,4 +56,104 @@ export function enqueueUpdate(fiber, update) {
         pending.next = update;
     }
     sharedQueue.pending = update;
+}
+
+export function initializeUpdateQueue(fiber) {
+    fiber.updateQueue = {
+        baseState: fiber.memoizedState,
+        baseQueue: null,
+        shared: {
+            pending: null
+        },
+        effects: null
+    };
+}
+
+
+
+export function cloneUpdateQueue(current, workInProgress) {
+    const currentQueue = current.updateQueue;
+    const workInProgressQueue = workInProgress.updateQueue;
+    //深拷贝
+    if (currentQueue === workInProgressQueue) {
+        workInProgress.updateQueue = {
+            baseState: currentQueue.baseState,
+            baseQueue: currentQueue.baseQueue,
+            shared: currentQueue.shared,
+            effects: currentQueue.effects
+        }
+    }
+}
+
+export function getStateFromUpdate(workInProgress, queue, update, prevState, nextProps) {
+    switch (update.tag) {
+      case UpdateState:
+        const payload = update.payload;
+        if (!payload) return prevState;
+        return Object.assign({}, prevState, payload);
+  
+      default:
+        break;
+    }
+  }
+
+// 通过遍历update链表，根据fiber.tag不同，通过不同的路径计算新的state
+export function processUpdateQueue(workInProgress, nextProps) {
+    const queue = workInProgress.updateQueue;
+    // base update 为 单向非环链表
+    let firstBaseUpdate = queue.firstBaseUpdate;
+    let lastBaseUpdate = queue.lastBaseUpdate;
+
+    // 如果有 pendingUpdate，需要将 pendingUpdate单向环状链表剪开并拼在baseUpdate单向链表后面
+    let pendingQueue = queue.shared.pending;
+
+    if (pendingQueue) {
+        queue.shared.pending = null;
+        const lastPendingUpdate = pendingQueue;
+        const firstPendingUpdate = pendingQueue.next;
+        // 将环剪开
+        lastPendingUpdate.next = null;
+
+        // 将pendingUpdate拼入baseUpdate
+        if (!lastBaseUpdate) {
+            firstBaseUpdate = firstPendingUpdate;
+        } else {
+            lastBaseUpdate.next = firstPendingUpdate;
+        }
+        lastBaseUpdate = lastPendingUpdate;
+
+        const current = workInProgress.alternate;
+        // 存在current 更新其updateQueue
+        if (current) {
+            const currentQueue = current.updateQueue;
+            const currentLastBaseUpdate = currentQueue.lastBaseUpdate;
+            if (lastBaseUpdate !== currentLastBaseUpdate) {
+                if (!currentLastBaseUpdate) {
+                    currentQueue.firstBaseUpdate = firstPendingUpdate;
+                } else {
+                    currentLastBaseUpdate.next = firstPendingUpdate;
+                }
+                current.lastBaseUpdate = lastPendingUpdate;
+            }
+        }
+    }
+
+    if (firstBaseUpdate) {
+        // 存在update时遍历链表，计算出update后的值
+
+        let newState = queue.baseState;
+        let update = firstBaseUpdate;
+        do {
+            // 需要考虑优先级，还未处理
+            newState = getStateFromUpdate(workInProgress, queue, update, newState, nextProps);
+            update = update.next;
+            if (!update) {
+                break;
+            }
+        } while (true)
+        queue.baseState = newState;
+        queue.firstBaseUpdate = null;
+        queue.lastBaseUpdate = null;
+        workInProgress.memoizedState = newState;
+    }
 }
