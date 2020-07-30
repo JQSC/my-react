@@ -18,6 +18,7 @@ let didReceiveUpdate = false;
 // 总体来说该函数会计算新state，返回child
 export function beginWork(current, workInProgress) {
     console.log('beginWork', workInProgress.tag)
+    console.log('test')
     if (current) {
         const oldProps = current.memoizedProps;
         const newProps = workInProgress.pendingProps;
