@@ -1,6 +1,7 @@
 import {
     FunctionComponent,
     ClassComponent,
+    IndeterminateComponent,
     HostRoot,
     HostComponent,
     HostText
@@ -8,12 +9,15 @@ import {
 
 import { cloneUpdateQueue, processUpdateQueue } from './ReactUpdateQueue';
 import { reconcileChildFibers, mountChildFibers } from './ReactChildFiber';
-import {shouldSetTextContent} from 'reactDOM/ReactHostConfig';
+import { shouldSetTextContent } from 'reactDOM/ReactHostConfig';
+import {renderWithHooks} from './ReactFiberHooks';
+
 let didReceiveUpdate = false;
 
 // render阶段开始处理fiber的入口
 // 总体来说该函数会计算新state，返回child
 export function beginWork(current, workInProgress) {
+    console.log('beginWork', workInProgress.tag)
     if (current) {
         const oldProps = current.memoizedProps;
         const newProps = workInProgress.pendingProps;
@@ -34,6 +38,8 @@ export function beginWork(current, workInProgress) {
                 Component,
                 workInProgress.pendingProps
             );
+        case IndeterminateComponent:
+            return mountIndeterminateComponent(current, workInProgress, workInProgress.type);
         case HostComponent:
             return updateHostComponent(current, workInProgress);
         case HostText:
@@ -43,7 +49,19 @@ export function beginWork(current, workInProgress) {
     }
 }
 
-
+// 可能是Class/Function Component，需要先mount后才能知道具体类型
+function mountIndeterminateComponent(current, workInProgress, Component) {
+    if (current) {
+        // TODO
+    }
+    const props = workInProgress.pendingProps;
+    const value = renderWithHooks(null, workInProgress, Component, props);
+    // TODO ClassComponent
+    // 当前只处理了 FunctionComponent
+    workInProgress.tag = FunctionComponent;
+    reconcileChildren(null, workInProgress, value);
+    return workInProgress.child;
+}
 
 // 更新HostRoot，
 // 遍历update链表，更新state
@@ -101,7 +119,6 @@ function updateHostComponent(current, workInProgress) {
         nextChildren = null;
     }
     // 省去 之前isDirectTextChild 现在不是情况的 diff
-
     reconcileChildren(
         current,
         workInProgress,
